@@ -6,10 +6,6 @@ require('dotenv').config();
 
 const app = express();
 
-const Student = require('./models/Student');
-const Course = require('./models/Course');
-const Enrollment = require('./models/Enrollment');
-
 app.use(cors());
 app.use(express.json());
 
@@ -41,6 +37,7 @@ enrollmentSchema.index({ student: 1, course: 1 }, { unique: true });
 const Student = mongoose.model('Student', studentSchema);
 const Course = mongoose.model('Course', courseSchema);
 const Enrollment = mongoose.model('Enrollment', enrollmentSchema);
+
 
 // Get all students (with optional search query)
 app.get('/api/students', async (req, res) => {
@@ -103,10 +100,15 @@ app.delete('/api/students/:id', async (req, res) => {
 });
 
 
-// Get all courses
+// Get all courses (with optional search query)
 app.get('/api/courses', async (req, res) => {
     try {
-        const courses = await Course.find();
+        const { search } = req.query;
+        let query = {};
+        if (search) {
+            query = { $or: [{ courseId: new RegExp(search, 'i') }, { courseName: new RegExp(search, 'i') }] };
+        }
+        const courses = await Course.find(query);
         res.json(courses);
     } catch (error) {
         console.error('Error fetching courses:', error);
@@ -208,11 +210,26 @@ app.post('/api/enrollments', async (req, res) => {
     }
 });
 
+// Delete an enrollment
+app.delete('/api/enrollments/:id', async (req, res) => {
+    try {
+        const enrollmentId = req.params.id;
+        const enrollment = await Enrollment.findByIdAndDelete(enrollmentId);
+        if (!enrollment) {
+            return res.status(404).json({ error: 'Enrollment not found' });
+        }
+        res.json({ message: 'Enrollment deleted successfully', enrollment });
+    } catch (error) {
+        console.error('Error deleting enrollment:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 
 const frontendDist = path.join(__dirname, '../frontend/dist');
 app.use(express.static(frontendDist));
 
-app.get('*', (req, res) => {
+app.get(/(.*)/, (req, res) => {
     res.sendFile(path.join(frontendDist, 'index.html'));
 });
 
